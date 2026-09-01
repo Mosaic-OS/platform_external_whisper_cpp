@@ -1,0 +1,122 @@
+package {
+    default_applicable_licenses: ["external_whisper_cpp_license"],
+}
+
+license {
+    name: "external_whisper_cpp_license",
+    visibility: [":__subpackages__"],
+    license_kinds: ["SPDX-license-identifier-MIT"],
+    license_text: ["LICENSE"],
+}
+
+cc_defaults {
+    name: "whisper_cpp_defaults",
+    sdk_version: "31",
+    stl: "c++_static",
+    rtti: true,
+    compile_multilib: "64",
+
+    cflags: [
+        "-O3",
+        "-DNDEBUG",
+        "-D_XOPEN_SOURCE=600",
+        "-D_GNU_SOURCE",
+        "-DGGML_USE_CPU",
+        "-DGGML_USE_CPU_REPACK",
+        "-DGGML_SCHED_MAX_COPIES=1",
+        "-DGGML_VERSION=\"0.20.2\"",
+        "-DGGML_COMMIT=\"371b5a7\"",
+        "-DWHISPER_VERSION=\"1.9.3\"",
+        "-fvisibility=hidden",
+        "-ffunction-sections",
+        "-fdata-sections",
+        "-Wno-unused-function",
+        "-Wno-unused-variable",
+        "-Wno-unused-parameter",
+        "-Wno-unused-but-set-variable",
+        "-Wno-missing-field-initializers",
+        "-Wno-sign-compare",
+        "-Wno-implicit-fallthrough",
+        "-Wno-format",
+        "-Wno-format-nonliteral",
+        "-Wno-macro-redefined",
+        "-Wno-deprecated-declarations",
+        "-Wno-c99-designator",
+        "-Wno-unreachable-code-loop-increment",
+        "-Wno-pessimizing-move",
+        "-Wno-unqualified-std-cast-call",
+    ],
+
+    cppflags: [
+        "-std=c++17",
+        "-fexceptions",
+    ],
+
+    conlyflags: [
+        "-std=c11",
+    ],
+
+    local_include_dirs: [
+        "ggml/include",
+        "ggml/src",
+        "ggml/src/ggml-cpu",
+        "include",
+    ],
+
+    arch: {
+        arm64: {
+            cflags: [
+                "-march=armv8.2-a+dotprod+fp16",
+            ],
+        },
+    },
+
+    enabled: false,
+    target: {
+        android_arm64: {
+            enabled: true,
+        },
+    },
+}
+
+
+cc_library_static {
+    name: "libwhisper_ggml_c",
+    defaults: ["whisper_cpp_defaults"],
+
+    srcs: [
+        "ggml/src/*.c",
+        "ggml/src/ggml-cpu/*.c",
+        "ggml/src/ggml-cpu/arch/arm/*.c",
+    ],
+}
+
+cc_library_static {
+    name: "libwhisper_static",
+    defaults: ["whisper_cpp_defaults"],
+
+    srcs: [
+        "ggml/src/*.cpp",
+        "ggml/src/ggml-cpu/*.cpp",
+        "ggml/src/ggml-cpu/arch/arm/*.cpp",
+        "src/*.cpp",
+    ],
+
+    exclude_srcs: [
+        // These optional or unrelated sources are not used by this static ARM64 build.
+        "ggml/src/ggml-opt.cpp",
+        "ggml/src/gguf.cpp",
+        "ggml/src/ggml-cpu/arch/arm/cpu-feats.cpp",
+        "ggml/src/ggml-cpu/amx/*.cpp",
+        "ggml/src/ggml-cpu/hbm.cpp",
+        "src/parakeet.cpp",
+    ],
+
+    whole_static_libs: ["libwhisper_ggml_c"],
+
+    // whisper.h includes ggml.h, so consumers need both directories.
+    export_include_dirs: [
+        "ggml/include",
+        "include",
+    ],
+}
