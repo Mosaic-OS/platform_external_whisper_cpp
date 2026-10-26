@@ -9,6 +9,14 @@ license {
     license_text: ["LICENSE"],
 }
 
+genrule {
+    name: "whisper_ggml_version_header",
+    srcs: ["ggml/src/ggml-version.h.in"],
+    out: ["ggml-version.h"],
+    cmd: "sed -e 's/@GGML_VERSION@/0.25.1/g' " +
+        "-e 's/@GGML_BUILD_COMMIT@/60c0be6/g' $(in) > $(out)",
+}
+
 cc_defaults {
     name: "whisper_cpp_defaults",
     sdk_version: "31",
@@ -24,9 +32,8 @@ cc_defaults {
         "-DGGML_USE_CPU",
         "-DGGML_USE_CPU_REPACK",
         "-DGGML_SCHED_MAX_COPIES=1",
-        "-DGGML_VERSION=\"0.20.2\"",
-        "-DGGML_COMMIT=\"371b5a7\"",
-        "-DWHISPER_VERSION=\"1.9.3\"",
+        "-DWHISPER_VERSION=\"1.9.4-dev\"",
+        "-DPARAKEET_VERSION=\"1.9.4-dev\"",
         "-fvisibility=hidden",
         "-ffunction-sections",
         "-fdata-sections",
@@ -56,20 +63,14 @@ cc_defaults {
         "-std=c11",
     ],
 
+    generated_headers: ["whisper_ggml_version_header"],
+
     local_include_dirs: [
         "ggml/include",
         "ggml/src",
         "ggml/src/ggml-cpu",
         "include",
     ],
-
-    arch: {
-        arm64: {
-            cflags: [
-                "-march=armv8.2-a+dotprod+fp16",
-            ],
-        },
-    },
 
     enabled: false,
     target: {
@@ -80,9 +81,33 @@ cc_defaults {
 }
 
 
+cc_defaults {
+    name: "whisper_cpp_arm64_defaults",
+    defaults: ["whisper_cpp_defaults"],
+    arch: {
+        arm64: {
+            cflags: [
+                "-march=armv8.2-a+dotprod+fp16",
+            ],
+        },
+    },
+}
+
+cc_defaults {
+    name: "whisper_cpp_i8mm_defaults",
+    defaults: ["whisper_cpp_defaults"],
+    arch: {
+        arm64: {
+            cflags: [
+                "-march=armv8.2-a+dotprod+fp16+i8mm",
+            ],
+        },
+    },
+}
+
 cc_library_static {
     name: "libwhisper_ggml_c",
-    defaults: ["whisper_cpp_defaults"],
+    defaults: ["whisper_cpp_arm64_defaults"],
 
     srcs: [
         "ggml/src/*.c",
@@ -93,26 +118,63 @@ cc_library_static {
 
 cc_library_static {
     name: "libwhisper_static",
-    defaults: ["whisper_cpp_defaults"],
+    defaults: ["whisper_cpp_arm64_defaults"],
 
     srcs: [
         "ggml/src/*.cpp",
         "ggml/src/ggml-cpu/*.cpp",
         "ggml/src/ggml-cpu/arch/arm/*.cpp",
+        "ggml/src/ggml-cpu/amx/*.cpp",
         "src/*.cpp",
+        "src/aneforge/whisper-aneforge.cpp",
     ],
 
     exclude_srcs: [
-        // These optional or unrelated sources are not used by this static ARM64 build.
-        "ggml/src/ggml-opt.cpp",
-        "ggml/src/gguf.cpp",
+        // Dynamic CPU scoring and the separate Parakeet library are not used by Whisper.
         "ggml/src/ggml-cpu/arch/arm/cpu-feats.cpp",
-        "ggml/src/ggml-cpu/amx/*.cpp",
-        "ggml/src/ggml-cpu/hbm.cpp",
         "src/parakeet.cpp",
     ],
 
     whole_static_libs: ["libwhisper_ggml_c"],
+
+    // whisper.h includes ggml.h, so consumers need both directories.
+    export_include_dirs: [
+        "ggml/include",
+        "include",
+    ],
+}
+
+cc_library_static {
+    name: "libwhisper_ggml_c_i8mm",
+    defaults: ["whisper_cpp_i8mm_defaults"],
+
+    srcs: [
+        "ggml/src/*.c",
+        "ggml/src/ggml-cpu/*.c",
+        "ggml/src/ggml-cpu/arch/arm/*.c",
+    ],
+}
+
+cc_library_static {
+    name: "libwhisper_static_i8mm",
+    defaults: ["whisper_cpp_i8mm_defaults"],
+
+    srcs: [
+        "ggml/src/*.cpp",
+        "ggml/src/ggml-cpu/*.cpp",
+        "ggml/src/ggml-cpu/arch/arm/*.cpp",
+        "ggml/src/ggml-cpu/amx/*.cpp",
+        "src/*.cpp",
+        "src/aneforge/whisper-aneforge.cpp",
+    ],
+
+    exclude_srcs: [
+        // Dynamic CPU scoring and the separate Parakeet library are not used by Whisper.
+        "ggml/src/ggml-cpu/arch/arm/cpu-feats.cpp",
+        "src/parakeet.cpp",
+    ],
+
+    whole_static_libs: ["libwhisper_ggml_c_i8mm"],
 
     // whisper.h includes ggml.h, so consumers need both directories.
     export_include_dirs: [
